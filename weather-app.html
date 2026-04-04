@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATMOS — Weather App</title>
+<link href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600;700;800&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#07090f;--surface:#0e111a;--card:#141824;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.12);
+  --sky:#60a5fa;--sky2:#3b82f6;--gold:#fbbf24;--rose:#f87171;--mint:#34d399;
+  --text:#f1f5f9;--muted:#64748b;
+}
+body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+
+/* Dynamic sky */
+.sky-bg{position:fixed;inset:0;transition:all 2s ease;z-index:0;background:linear-gradient(180deg,#07090f 0%,#0e0f1c 100%);}
+.sky-bg.clear-day{background:linear-gradient(180deg,#0369a1 0%,#0c4a6e 40%,#082f49 100%);}
+.sky-bg.clear-night{background:linear-gradient(180deg,#020617 0%,#0f172a 40%,#1e1b4b 100%);}
+.sky-bg.cloudy{background:linear-gradient(180deg,#1e293b 0%,#0f172a 100%);}
+.sky-bg.rainy{background:linear-gradient(180deg,#0f172a 0%,#1e3a5f 100%);}
+.sky-bg.snowy{background:linear-gradient(180deg,#1e2a3a 0%,#1a2540 100%);}
+
+/* Stars */
+.stars{position:fixed;inset:0;z-index:0;pointer-events:none;}
+.star{position:absolute;background:#fff;border-radius:50%;animation:twinkle var(--dur) ease-in-out infinite;animation-delay:var(--delay);}
+@keyframes twinkle{0%,100%{opacity:0.1;transform:scale(1)}50%{opacity:0.8;transform:scale(1.2)}}
+
+/* Weather particles */
+.particles{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
+.rain-drop{position:absolute;width:1px;background:linear-gradient(180deg,transparent,rgba(147,197,253,0.5));animation:rainFall linear infinite;top:-20px;}
+.snow-flake{position:absolute;color:rgba(255,255,255,0.7);animation:snowFall linear infinite;font-size:12px;}
+@keyframes rainFall{to{transform:translateY(110vh)}}
+@keyframes snowFall{to{transform:translateY(110vh) translateX(50px);opacity:0}}
+
+.container{position:relative;z-index:1;max-width:480px;margin:0 auto;padding:32px 20px 60px;}
+
+/* Header */
+.app-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:36px;animation:fadeDown 0.6s ease both;}
+.app-name{font-size:13px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);}
+.app-name span{color:var(--sky);}
+.header-time{font-size:12px;color:var(--muted);font-weight:300;}
+
+/* Search */
+.search-box{position:relative;margin-bottom:32px;animation:fadeDown 0.6s 0.05s ease both;}
+.search-inner{display:flex;align-items:center;background:var(--card);border:1px solid var(--border2);border-radius:16px;overflow:hidden;transition:all 0.3s;}
+.search-inner:focus-within{border-color:rgba(96,165,250,0.5);box-shadow:0 0 0 3px rgba(96,165,250,0.1);}
+.search-icon{padding:0 16px;color:var(--muted);font-size:18px;flex-shrink:0;}
+.search-input{flex:1;background:transparent;border:none;padding:16px 8px;font-family:'Outfit',sans-serif;font-size:15px;color:var(--text);outline:none;}
+.search-input::placeholder{color:var(--muted);}
+.search-btn{background:var(--sky2);border:none;padding:14px 20px;font-family:'Outfit',sans-serif;font-size:13px;font-weight:700;color:#fff;cursor:pointer;transition:all 0.3s;margin:4px;border-radius:12px;letter-spacing:0.04em;}
+.search-btn:hover{background:var(--sky);transform:scale(1.02);}
+.search-btn.loading{pointer-events:none;opacity:0.7;}
+
+/* Error */
+.error-msg{background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.3);border-radius:12px;padding:14px 18px;font-size:14px;color:var(--rose);margin-bottom:20px;display:none;animation:fadeIn 0.3s ease;}
+.error-msg.show{display:block;}
+
+/* Main weather card */
+.weather-card{background:var(--card);border:1px solid var(--border2);border-radius:28px;padding:36px;margin-bottom:20px;position:relative;overflow:hidden;animation:fadeUp 0.6s 0.1s ease both;}
+.weather-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--sky),transparent);}
+.weather-card::after{content:'';position:absolute;top:-80px;right:-80px;width:250px;height:250px;border-radius:50%;background:radial-gradient(circle,rgba(96,165,250,0.08),transparent);pointer-events:none;}
+
+.location-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.city-name{font-size:24px;font-weight:700;letter-spacing:-0.01em;}
+.country-code{font-size:13px;font-weight:600;color:var(--muted);background:rgba(255,255,255,0.06);border-radius:6px;padding:2px 8px;margin-left:8px;}
+.local-time{font-size:13px;color:var(--muted);font-weight:300;}
+
+.weather-main{display:flex;align-items:center;justify-content:space-between;margin:24px 0;}
+.temp-display{display:flex;align-items:flex-start;gap:4px;}
+.temp-big{font-size:84px;font-weight:200;line-height:1;letter-spacing:-4px;}
+.temp-unit{font-size:28px;font-weight:300;margin-top:12px;color:var(--muted);}
+.weather-icon-wrap{text-align:center;}
+.weather-emoji{font-size:72px;line-height:1;filter:drop-shadow(0 8px 24px rgba(0,0,0,0.4));animation:iconFloat 3s ease-in-out infinite;}
+@keyframes iconFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.weather-desc{font-size:16px;font-weight:500;color:var(--sky);text-transform:capitalize;text-align:center;margin-top:8px;}
+
+.feels{font-size:14px;color:var(--muted);margin-bottom:20px;}
+.feels span{color:var(--text);font-weight:600;}
+
+/* Details grid */
+.details-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+.detail-item{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:14px;padding:16px;transition:all 0.25s;}
+.detail-item:hover{background:rgba(255,255,255,0.05);border-color:var(--border2);}
+.detail-label{font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+.detail-value{font-size:20px;font-weight:600;color:var(--text);}
+.detail-unit{font-size:13px;color:var(--muted);font-weight:400;}
+
+/* Forecast */
+.forecast-card{background:var(--card);border:1px solid var(--border2);border-radius:24px;padding:24px;margin-bottom:20px;animation:fadeUp 0.6s 0.2s ease both;}
+.section-title{font-size:12px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);margin-bottom:18px;}
+.forecast-row{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px;}
+.forecast-row::-webkit-scrollbar{display:none;}
+.forecast-item{flex-shrink:0;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:16px;padding:16px 14px;text-align:center;min-width:72px;transition:all 0.25s;}
+.forecast-item:hover{background:rgba(96,165,250,0.08);border-color:rgba(96,165,250,0.3);}
+.forecast-day{font-size:11px;font-weight:700;letter-spacing:0.06em;color:var(--muted);margin-bottom:8px;}
+.forecast-icon{font-size:24px;margin-bottom:8px;}
+.forecast-hi{font-size:16px;font-weight:700;}
+.forecast-lo{font-size:12px;color:var(--muted);margin-top:2px;}
+
+/* Air quality / UV */
+.info-strip{display:grid;grid-template-columns:1fr 1fr;gap:12px;animation:fadeUp 0.6s 0.25s ease both;}
+.info-strip-card{background:var(--card);border:1px solid var(--border2);border-radius:20px;padding:20px;}
+.isc-label{font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;}
+.isc-value{font-size:28px;font-weight:700;margin-bottom:4px;}
+.isc-desc{font-size:12px;color:var(--muted);}
+.uv-bar{height:6px;background:var(--border);border-radius:100px;overflow:hidden;margin:8px 0 4px;}
+.uv-fill{height:100%;border-radius:100px;background:linear-gradient(90deg,var(--mint),var(--gold),var(--rose));transition:width 1s ease;}
+
+/* Placeholder */
+.placeholder-state{text-align:center;padding:60px 20px;animation:fadeIn 0.5s ease;}
+.ph-icon{font-size:64px;margin-bottom:20px;animation:iconFloat 3s ease-in-out infinite;}
+.ph-title{font-size:22px;font-weight:600;margin-bottom:8px;}
+.ph-sub{font-size:14px;color:var(--muted);line-height:1.6;}
+.quick-cities{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:24px;}
+.quick-city{background:var(--card);border:1px solid var(--border2);border-radius:100px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.25s;}
+.quick-city:hover{background:rgba(96,165,250,0.1);border-color:rgba(96,165,250,0.4);color:var(--sky);}
+
+.weather-data{display:none;}
+.weather-data.visible{display:block;}
+
+/* Animations */
+@keyframes fadeDown{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+</style>
+</head>
+<body>
+
+<div class="sky-bg" id="sky-bg"></div>
+<div class="stars" id="stars"></div>
+<div class="particles" id="particles"></div>
+
+<div class="container">
+  <div class="app-header">
+    <div class="app-name">ATMOS<span>.</span></div>
+    <div class="header-time" id="header-time"></div>
+  </div>
+
+  <div class="search-box">
+    <div class="search-inner">
+      <div class="search-icon">🔍</div>
+      <input class="search-input" id="city-input" type="text" placeholder="Search city or location..." autocomplete="off">
+      <button class="search-btn" id="search-btn" onclick="fetchWeather()">Search</button>
+    </div>
+  </div>
+
+  <div class="error-msg" id="error-msg"></div>
+
+  <!-- Placeholder -->
+  <div id="placeholder">
+    <div class="placeholder-state">
+      <div class="ph-icon">🌍</div>
+      <div class="ph-title">Where in the world?</div>
+      <div class="ph-sub">Search any city to get real-time weather,<br>forecast, humidity, wind speed & more.</div>
+      <div class="quick-cities">
+        <span class="quick-city" onclick="quickSearch('London')">🇬🇧 London</span>
+        <span class="quick-city" onclick="quickSearch('Tokyo')">🇯🇵 Tokyo</span>
+        <span class="quick-city" onclick="quickSearch('New York')">🇺🇸 New York</span>
+        <span class="quick-city" onclick="quickSearch('Mumbai')">🇮🇳 Mumbai</span>
+        <span class="quick-city" onclick="quickSearch('Dubai')">🇦🇪 Dubai</span>
+        <span class="quick-city" onclick="quickSearch('Paris')">🇫🇷 Paris</span>
+        <span class="quick-city" onclick="quickSearch('Karachi')">🇵🇰 Karachi</span>
+        <span class="quick-city" onclick="quickSearch('Lahore')">🇵🇰 Lahore</span>
+        <span class="quick-city" onclick="quickSearch('Islamabad')">🇵🇰 Islamabad</span>
+        <span class="quick-city" onclick="quickSearch('Peshawar')">🇵🇰 Peshawar</span>
+        <span class="quick-city" onclick="quickSearch('Quetta')">🇵🇰 Quetta</span>
+        <span class="quick-city" onclick="quickSearch('Riyadh')">🇸🇦 Riyadh</span>
+        <span class="quick-city" onclick="quickSearch('Jeddah')">🇸🇦 Jeddah</span>
+        <span class="quick-city" onclick="quickSearch('Mecca')">🇸🇦 Mecca</span>
+        <span class="quick-city" onclick="quickSearch('Medina')">🇸🇦 Medina</span>
+        <span class="quick-city" onclick="quickSearch('Istanbul')">🇹🇷 Istanbul</span>
+        <span class="quick-city" onclick="quickSearch('Ankara')">🇹🇷 Ankara</span>
+        <span class="quick-city" onclick="quickSearch('Izmir')">🇹🇷 Izmir</span>
+        <span class="quick-city" onclick="quickSearch('Antalya')">🇹🇷 Antalya</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Weather Data -->
+  <div class="weather-data" id="weather-data">
+    <!-- Main card -->
+    <div class="weather-card">
+      <div class="location-row">
+        <div style="display:flex;align-items:baseline;gap:4px;">
+          <div class="city-name" id="w-city">—</div>
+          <div class="country-code" id="w-country">—</div>
+        </div>
+        <div class="local-time" id="w-localtime">—</div>
+      </div>
+
+      <div class="weather-main">
+        <div>
+          <div class="temp-display">
+            <div class="temp-big" id="w-temp">—</div>
+            <div class="temp-unit">°C</div>
+          </div>
+        </div>
+        <div class="weather-icon-wrap">
+          <div class="weather-emoji" id="w-icon">🌤</div>
+          <div class="weather-desc" id="w-desc">—</div>
+        </div>
+      </div>
+
+      <div class="feels">Feels like <span id="w-feels">—</span>°C · <span id="w-hi-lo">—</span></div>
+
+      <div class="details-grid">
+        <div class="detail-item">
+          <div class="detail-label">💧 Humidity</div>
+          <div class="detail-value"><span id="w-humidity">—</span><span class="detail-unit">%</span></div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">💨 Wind</div>
+          <div class="detail-value"><span id="w-wind">—</span><span class="detail-unit"> km/h</span></div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">👁 Visibility</div>
+          <div class="detail-value"><span id="w-vis">—</span><span class="detail-unit"> km</span></div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">🌡 Pressure</div>
+          <div class="detail-value"><span id="w-pressure">—</span><span class="detail-unit"> hPa</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Forecast -->
+    <div class="forecast-card">
+      <div class="section-title">5-Day Outlook</div>
+      <div class="forecast-row" id="forecast-row"></div>
+    </div>
+
+    <!-- Info strip -->
+    <div class="info-strip">
+      <div class="info-strip-card">
+        <div class="isc-label">🌅 Sunrise / Sunset</div>
+        <div class="isc-value" id="w-sunrise" style="font-size:18px;color:var(--gold);">—</div>
+        <div class="isc-desc" id="w-sunset">Sunset: —</div>
+      </div>
+      <div class="info-strip-card">
+        <div class="isc-label">☀️ UV Index</div>
+        <div class="isc-value" id="w-uv" style="color:var(--gold);">—</div>
+        <div class="uv-bar"><div class="uv-fill" id="uv-bar-fill" style="width:0%"></div></div>
+        <div class="isc-desc" id="w-uv-label">—</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// !! REPLACE WITH YOUR FREE KEY FROM openweathermap.org !!
+const API_KEY = 'DEMO';
+
+// Live clock
+function updateClock() {
+  const now = new Date();
+  document.getElementById('header-time').textContent = now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// Stars
+function createStars() {
+  const container = document.getElementById('stars');
+  for(let i=0;i<120;i++){
+    const s=document.createElement('div');
+    s.className='star';
+    const sz=Math.random()*2+0.5;
+    s.style.cssText=`width:${sz}px;height:${sz}px;top:${Math.random()*100}%;left:${Math.random()*100}%;--dur:${2+Math.random()*4}s;--delay:${Math.random()*4}s;`;
+    container.appendChild(s);
+  }
+}
+createStars();
+
+function getWeatherIcon(id, isDay=true) {
+  if(id>=200&&id<300) return '⛈';
+  if(id>=300&&id<400) return '🌦';
+  if(id>=500&&id<600) return id<511?'🌧':'🌨';
+  if(id>=600&&id<700) return id===611?'🌨':'❄️';
+  if(id>=700&&id<800) return id===741?'🌫':'💨';
+  if(id===800) return isDay?'☀️':'🌙';
+  if(id===801) return isDay?'🌤':'🌙';
+  if(id<=803) return '⛅';
+  return '☁️';
+}
+
+function setSkyBg(id, isDay) {
+  const sky = document.getElementById('sky-bg');
+  sky.className = 'sky-bg';
+  if(id===800) sky.classList.add(isDay?'clear-day':'clear-night');
+  else if(id<700) sky.classList.add(id<600?'rainy':'snowy');
+  else sky.classList.add('cloudy');
+}
+
+function setParticles(id) {
+  const p = document.getElementById('particles');
+  p.innerHTML = '';
+  if(id>=500&&id<600) {
+    for(let i=0;i<60;i++){
+      const d=document.createElement('div');
+      d.className='rain-drop';
+      const h=40+Math.random()*80;
+      d.style.cssText=`left:${Math.random()*100}%;height:${h}px;animation-duration:${0.6+Math.random()*0.4}s;animation-delay:${Math.random()*2}s;opacity:${0.3+Math.random()*0.4};`;
+      p.appendChild(d);
+    }
+  } else if(id>=600&&id<700) {
+    for(let i=0;i<40;i++){
+      const f=document.createElement('div');
+      f.className='snow-flake';
+      f.textContent='❄';
+      f.style.cssText=`left:${Math.random()*100}%;animation-duration:${3+Math.random()*4}s;animation-delay:${Math.random()*4}s;font-size:${8+Math.random()*12}px;`;
+      p.appendChild(f);
+    }
+  }
+}
+
+function formatTime(unix, tz) {
+  return new Date((unix+tz)*1000).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
+}
+
+const mockData = {
+  'london':{city:'London',country:'GB',temp:14,feels:11,desc:'overcast clouds',id:804,humidity:78,wind:18,vis:10,pressure:1012,hi:16,lo:9,sunrise:'06:42',sunset:'20:15',uv:2,forecast:[{day:'Mon',icon:'⛅',hi:16,lo:9},{day:'Tue',icon:'🌧',hi:12,lo:8},{day:'Wed',icon:'🌦',hi:14,lo:10},{day:'Thu',icon:'☁️',hi:15,lo:11},{day:'Fri',icon:'🌤',hi:18,lo:12}]},
+  'tokyo':{city:'Tokyo',country:'JP',temp:22,feels:21,desc:'clear sky',id:800,humidity:60,wind:12,vis:16,pressure:1018,hi:25,lo:17,sunrise:'05:10',sunset:'18:44',uv:5,forecast:[{day:'Mon',icon:'☀️',hi:25,lo:17},{day:'Tue',icon:'⛅',hi:24,lo:16},{day:'Wed',icon:'🌤',hi:23,lo:15},{day:'Thu',icon:'🌦',hi:20,lo:14},{day:'Fri',icon:'☁️',hi:22,lo:16}]},
+  'new york':{city:'New York',country:'US',temp:19,feels:17,desc:'partly cloudy',id:802,humidity:55,wind:22,vis:14,pressure:1015,hi:22,lo:13,sunrise:'06:18',sunset:'19:52',uv:4,forecast:[{day:'Mon',icon:'⛅',hi:22,lo:13},{day:'Tue',icon:'☀️',hi:26,lo:15},{day:'Wed',icon:'🌤',hi:24,lo:14},{day:'Thu',icon:'⛈',hi:18,lo:12},{day:'Fri',icon:'⛅',hi:20,lo:13}]},
+  'mumbai':{city:'Mumbai',country:'IN',temp:32,feels:38,desc:'humid and hazy',id:721,humidity:85,wind:14,vis:8,pressure:1006,hi:33,lo:27,sunrise:'06:28',sunset:'19:10',uv:8,forecast:[{day:'Mon',icon:'🌫',hi:33,lo:27},{day:'Tue',icon:'🌧',hi:30,lo:26},{day:'Wed',icon:'⛈',hi:29,lo:25},{day:'Thu',icon:'🌦',hi:31,lo:26},{day:'Fri',icon:'🌤',hi:32,lo:27}]},
+  'dubai':{city:'Dubai',country:'AE',temp:38,feels:44,desc:'clear sky',id:800,humidity:42,wind:16,vis:20,pressure:1001,hi:40,lo:30,sunrise:'05:48',sunset:'18:36',uv:11,forecast:[{day:'Mon',icon:'☀️',hi:40,lo:30},{day:'Tue',icon:'☀️',hi:39,lo:29},{day:'Wed',icon:'🌤',hi:38,lo:28},{day:'Thu',icon:'⛅',hi:36,lo:27},{day:'Fri',icon:'☀️',hi:39,lo:30}]},
+  'paris':{city:'Paris',country:'FR',temp:17,feels:15,desc:'light rain',id:500,humidity:72,wind:20,vis:12,pressure:1010,hi:19,lo:12,sunrise:'07:02',sunset:'20:30',uv:3,forecast:[{day:'Mon',icon:'🌧',hi:19,lo:12},{day:'Tue',icon:'🌦',hi:18,lo:11},{day:'Wed',icon:'⛅',hi:20,lo:13},{day:'Thu',icon:'🌤',hi:22,lo:14},{day:'Fri',icon:'☀️',hi:24,lo:15}]},
+  // 🇵🇰 Pakistan Cities
+  'karachi':{city:'Karachi',country:'PK',temp:34,feels:40,desc:'hot and humid',id:721,humidity:80,wind:18,vis:8,pressure:1004,hi:36,lo:28,sunrise:'06:05',sunset:'19:22',uv:9,forecast:[{day:'Mon',icon:'🌫',hi:36,lo:28},{day:'Tue',icon:'☀️',hi:37,lo:29},{day:'Wed',icon:'⛅',hi:35,lo:27},{day:'Thu',icon:'☀️',hi:36,lo:28},{day:'Fri',icon:'🌤',hi:35,lo:27}]},
+  'lahore':{city:'Lahore',country:'PK',temp:36,feels:42,desc:'sunny and hot',id:800,humidity:45,wind:14,vis:12,pressure:1002,hi:39,lo:26,sunrise:'05:42',sunset:'19:08',uv:10,forecast:[{day:'Mon',icon:'☀️',hi:39,lo:26},{day:'Tue',icon:'☀️',hi:40,lo:27},{day:'Wed',icon:'⛅',hi:37,lo:25},{day:'Thu',icon:'🌤',hi:38,lo:26},{day:'Fri',icon:'☀️',hi:39,lo:27}]},
+  'Malakwal':{city:'Malakwal',country:'PK',temp:36,feels:42,desc:'sunny and hot',id:800,humidity:45,wind:14,vis:12,pressure:1002,hi:39,lo:26,sunrise:'05:42',sunset:'19:08',uv:10,forecast:[{day:'Mon',icon:'☀️',hi:39,lo:26},{day:'Tue',icon:'☀️',hi:40,lo:27},{day:'Wed',icon:'⛅',hi:37,lo:25},{day:'Thu',icon:'🌤',hi:38,lo:26},{day:'Fri',icon:'☀️',hi:39,lo:27}]},
+  'islamabad':{city:'Islamabad',country:'PK',temp:28,feels:30,desc:'partly cloudy',id:802,humidity:55,wind:16,vis:14,pressure:1008,hi:31,lo:20,sunrise:'05:38',sunset:'19:05',uv:7,forecast:[{day:'Mon',icon:'⛅',hi:31,lo:20},{day:'Tue',icon:'🌦',hi:27,lo:19},{day:'Wed',icon:'⛈',hi:24,lo:18},{day:'Thu',icon:'⛅',hi:29,lo:20},{day:'Fri',icon:'☀️',hi:32,lo:21}]},
+  'peshawar':{city:'Peshawar',country:'PK',temp:33,feels:37,desc:'clear sky',id:800,humidity:38,wind:20,vis:15,pressure:1005,hi:36,lo:24,sunrise:'05:44',sunset:'19:10',uv:9,forecast:[{day:'Mon',icon:'☀️',hi:36,lo:24},{day:'Tue',icon:'🌤',hi:35,lo:23},{day:'Wed',icon:'⛅',hi:32,lo:22},{day:'Thu',icon:'☀️',hi:34,lo:23},{day:'Fri',icon:'☀️',hi:36,lo:24}]},
+  'quetta':{city:'Quetta',country:'PK',temp:24,feels:22,desc:'clear and cool',id:800,humidity:30,wind:22,vis:20,pressure:1012,hi:27,lo:14,sunrise:'05:55',sunset:'19:15',uv:8,forecast:[{day:'Mon',icon:'☀️',hi:27,lo:14},{day:'Tue',icon:'⛅',hi:25,lo:13},{day:'Wed',icon:'🌤',hi:26,lo:14},{day:'Thu',icon:'☀️',hi:28,lo:15},{day:'Fri',icon:'☀️',hi:29,lo:15}]},
+  'pakistan':{city:'Karachi',country:'PK',temp:34,feels:40,desc:'hot and humid',id:721,humidity:80,wind:18,vis:8,pressure:1004,hi:36,lo:28,sunrise:'06:05',sunset:'19:22',uv:9,forecast:[{day:'Mon',icon:'🌫',hi:36,lo:28},{day:'Tue',icon:'☀️',hi:37,lo:29},{day:'Wed',icon:'⛅',hi:35,lo:27},{day:'Thu',icon:'☀️',hi:36,lo:28},{day:'Fri',icon:'🌤',hi:35,lo:27}]},
+  // 🇸🇦 Saudi Arabia Cities
+  'riyadh':{city:'Riyadh',country:'SA',temp:42,feels:48,desc:'clear and very hot',id:800,humidity:15,wind:20,vis:20,pressure:998,hi:44,lo:30,sunrise:'05:32',sunset:'18:48',uv:12,forecast:[{day:'Mon',icon:'☀️',hi:44,lo:30},{day:'Tue',icon:'☀️',hi:43,lo:29},{day:'Wed',icon:'☀️',hi:45,lo:31},{day:'Thu',icon:'🌤',hi:42,lo:30},{day:'Fri',icon:'☀️',hi:44,lo:31}]},
+  'jeddah':{city:'Jeddah',country:'SA',temp:38,feels:45,desc:'hot and humid',id:800,humidity:65,wind:14,vis:15,pressure:1002,hi:40,lo:30,sunrise:'05:48',sunset:'18:55',uv:11,forecast:[{day:'Mon',icon:'☀️',hi:40,lo:30},{day:'Tue',icon:'⛅',hi:39,lo:29},{day:'Wed',icon:'☀️',hi:40,lo:30},{day:'Thu',icon:'☀️',hi:41,lo:31},{day:'Fri',icon:'🌤',hi:39,lo:30}]},
+  'mecca':{city:'Mecca',country:'SA',temp:40,feels:47,desc:'clear sky',id:800,humidity:30,wind:12,vis:18,pressure:1000,hi:42,lo:32,sunrise:'05:44',sunset:'18:52',uv:12,forecast:[{day:'Mon',icon:'☀️',hi:42,lo:32},{day:'Tue',icon:'☀️',hi:43,lo:33},{day:'Wed',icon:'☀️',hi:41,lo:31},{day:'Thu',icon:'☀️',hi:42,lo:32},{day:'Fri',icon:'🌤',hi:40,lo:31}]},
+  'medina':{city:'Medina',country:'SA',temp:39,feels:44,desc:'sunny and dry',id:800,humidity:20,wind:16,vis:20,pressure:999,hi:41,lo:29,sunrise:'05:40',sunset:'18:50',uv:11,forecast:[{day:'Mon',icon:'☀️',hi:41,lo:29},{day:'Tue',icon:'☀️',hi:42,lo:30},{day:'Wed',icon:'🌤',hi:40,lo:28},{day:'Thu',icon:'☀️',hi:41,lo:29},{day:'Fri',icon:'☀️',hi:43,lo:30}]},
+  'saudi arabia':{city:'Riyadh',country:'SA',temp:42,feels:48,desc:'clear and very hot',id:800,humidity:15,wind:20,vis:20,pressure:998,hi:44,lo:30,sunrise:'05:32',sunset:'18:48',uv:12,forecast:[{day:'Mon',icon:'☀️',hi:44,lo:30},{day:'Tue',icon:'☀️',hi:43,lo:29},{day:'Wed',icon:'☀️',hi:45,lo:31},{day:'Thu',icon:'🌤',hi:42,lo:30},{day:'Fri',icon:'☀️',hi:44,lo:31}]},
+  // 🇹🇷 Turkey Cities
+  'istanbul':{city:'Istanbul',country:'TR',temp:18,feels:16,desc:'partly cloudy',id:802,humidity:68,wind:24,vis:14,pressure:1014,hi:21,lo:13,sunrise:'06:10',sunset:'19:45',uv:4,forecast:[{day:'Mon',icon:'⛅',hi:21,lo:13},{day:'Tue',icon:'🌧',hi:17,lo:12},{day:'Wed',icon:'⛅',hi:19,lo:13},{day:'Thu',icon:'🌤',hi:22,lo:14},{day:'Fri',icon:'☀️',hi:24,lo:15}]},
+  'ankara':{city:'Ankara',country:'TR',temp:15,feels:12,desc:'cool and cloudy',id:804,humidity:60,wind:28,vis:12,pressure:1016,hi:18,lo:8,sunrise:'06:02',sunset:'19:38',uv:3,forecast:[{day:'Mon',icon:'☁️',hi:18,lo:8},{day:'Tue',icon:'🌦',hi:14,lo:7},{day:'Wed',icon:'⛅',hi:16,lo:9},{day:'Thu',icon:'🌤',hi:19,lo:10},{day:'Fri',icon:'☀️',hi:21,lo:11}]},
+  'izmir':{city:'Izmir',country:'TR',temp:22,feels:21,desc:'sunny and warm',id:800,humidity:50,wind:18,vis:18,pressure:1013,hi:25,lo:16,sunrise:'06:18',sunset:'20:00',uv:6,forecast:[{day:'Mon',icon:'☀️',hi:25,lo:16},{day:'Tue',icon:'🌤',hi:24,lo:15},{day:'Wed',icon:'⛅',hi:22,lo:14},{day:'Thu',icon:'☀️',hi:26,lo:16},{day:'Fri',icon:'☀️',hi:27,lo:17}]},
+  'antalya':{city:'Antalya',country:'TR',temp:26,feels:27,desc:'clear sky',id:800,humidity:55,wind:14,vis:20,pressure:1012,hi:28,lo:18,sunrise:'06:22',sunset:'20:05',uv:7,forecast:[{day:'Mon',icon:'☀️',hi:28,lo:18},{day:'Tue',icon:'☀️',hi:29,lo:19},{day:'Wed',icon:'🌤',hi:27,lo:18},{day:'Thu',icon:'⛅',hi:26,lo:17},{day:'Fri',icon:'☀️',hi:28,lo:18}]},
+  'turkey':{city:'Istanbul',country:'TR',temp:18,feels:16,desc:'partly cloudy',id:802,humidity:68,wind:24,vis:14,pressure:1014,hi:21,lo:13,sunrise:'06:10',sunset:'19:45',uv:4,forecast:[{day:'Mon',icon:'⛅',hi:21,lo:13},{day:'Tue',icon:'🌧',hi:17,lo:12},{day:'Wed',icon:'⛅',hi:19,lo:13},{day:'Thu',icon:'🌤',hi:22,lo:14},{day:'Fri',icon:'☀️',hi:24,lo:15}]},
+};
+
+async function fetchWeather() {
+  const city = document.getElementById('city-input').value.trim();
+  if(!city){showError('Please enter a city name');return;}
+  
+  const btn = document.getElementById('search-btn');
+  btn.textContent='...';btn.classList.add('loading');
+  hideError();
+
+  await new Promise(r=>setTimeout(r,800));
+
+  const key = city.toLowerCase();
+  const data = mockData[key];
+
+  btn.textContent='Search';btn.classList.remove('loading');
+
+  if(!data){showError(`City "${city}" not found. Try: Karachi, Lahore,  Malakwal, Islamabad, Peshawar, Quetta, Riyadh, Jeddah, Mecca, Medina, Istanbul, Ankara, Izmir, Antalya, London, Tokyo, Dubai...`);return;}
+  
+  renderWeather(data);
+}
+
+function renderWeather(d) {
+  document.getElementById('placeholder').style.display='none';
+  document.getElementById('weather-data').classList.add('visible');
+
+  document.getElementById('w-city').textContent=d.city;
+  document.getElementById('w-country').textContent=d.country;
+  document.getElementById('w-localtime').textContent=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('w-temp').textContent=d.temp;
+  document.getElementById('w-icon').textContent=getWeatherIcon(d.id);
+  document.getElementById('w-desc').textContent=d.desc;
+  document.getElementById('w-feels').textContent=d.feels;
+  document.getElementById('w-hi-lo').textContent=`H:${d.hi}° L:${d.lo}°`;
+  document.getElementById('w-humidity').textContent=d.humidity;
+  document.getElementById('w-wind').textContent=Math.round(d.wind);
+  document.getElementById('w-vis').textContent=d.vis;
+  document.getElementById('w-pressure').textContent=d.pressure;
+  document.getElementById('w-sunrise').textContent=`🌅 ${d.sunrise}`;
+  document.getElementById('w-sunset').textContent=`Sunset: ${d.sunset}`;
+  document.getElementById('w-uv').textContent=d.uv;
+  document.getElementById('uv-bar-fill').style.width=Math.min(d.uv/12*100,100)+'%';
+  document.getElementById('w-uv-label').textContent=d.uv<=2?'Low':d.uv<=5?'Moderate':d.uv<=7?'High':d.uv<=10?'Very High':'Extreme';
+
+  // Forecast
+  document.getElementById('forecast-row').innerHTML=d.forecast.map(f=>`
+    <div class="forecast-item">
+      <div class="forecast-day">${f.day}</div>
+      <div class="forecast-icon">${f.icon}</div>
+      <div class="forecast-hi">${f.hi}°</div>
+      <div class="forecast-lo">${f.lo}°</div>
+    </div>
+  `).join('');
+
+  setSkyBg(d.id, true);
+  setParticles(d.id);
+}
+
+function quickSearch(city){
+  document.getElementById('city-input').value=city;
+  fetchWeather();
+}
+
+function showError(msg){
+  const el=document.getElementById('error-msg');
+  el.textContent='⚠️ '+msg;el.classList.add('show');
+}
+function hideError(){document.getElementById('error-msg').classList.remove('show');}
+
+document.getElementById('city-input').addEventListener('keydown',e=>{if(e.key==='Enter')fetchWeather();});
+</script>
+</body>
+</html>
